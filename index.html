@@ -1,0 +1,1182 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Bug Hunter — IBM AI Builders Challenge</title>
+  <style>
+    /* =============================================================
+       CSS CUSTOM PROPERTIES — DARK TERMINAL / CYBERPUNK THEME
+       All colours pass WCAG AA (4.5:1 on body text, 3:1 on UI)
+       ============================================================= */
+    :root {
+      --bg:          #0a0d0a;
+      --surface:     #111611;
+      --border:      #1f3a1f;
+      --neon:        #39ff14;   /* neon green — primary accent */
+      --neon-dim:    #1a7a06;
+      --neon-glow:   rgba(57,255,20,0.35);
+      --amber:       #ffb700;   /* warnings / combo */
+      --red:         #ff3c3c;   /* lives / danger */
+      --cyan:        #00e5ff;   /* secondary accent */
+      --text:        #c8f7c5;   /* body text — 8.4:1 on --bg */
+      --text-muted:  #6fa86a;   /* muted  — 4.6:1 on --bg */
+      --font:        'Courier New', Courier, monospace;
+      --shake-x:     0px;
+      --shake-y:     0px;
+    }
+
+    /* =============================================================
+       RESET & BASE
+       ============================================================= */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html, body {
+      width: 100%; height: 100%;
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font);
+      overflow: hidden;
+      user-select: none;
+    }
+
+    /* =============================================================
+       SCREEN MANAGEMENT  (only .active is shown)
+       ============================================================= */
+    .screen {
+      position: absolute; inset: 0;
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 1.4rem;
+    }
+    .screen.active { display: flex; }
+
+    /* =============================================================
+       TYPOGRAPHY HELPERS
+       ============================================================= */
+    .title {
+      font-size: clamp(2rem, 6vw, 3.6rem);
+      color: var(--neon);
+      text-shadow: 0 0 8px var(--neon-glow), 0 0 20px var(--neon-glow);
+      letter-spacing: .15em;
+      text-transform: uppercase;
+    }
+    .subtitle {
+      font-size: clamp(.85rem, 2vw, 1.1rem);
+      color: var(--text-muted);
+      letter-spacing: .08em;
+    }
+    .label {
+      font-size: .78rem;
+      color: var(--text-muted);
+      letter-spacing: .12em;
+      text-transform: uppercase;
+    }
+
+    /* =============================================================
+       BUTTONS
+       ============================================================= */
+    .btn {
+      padding: .65rem 2.4rem;
+      background: transparent;
+      border: 2px solid var(--neon);
+      color: var(--neon);
+      font-family: var(--font);
+      font-size: 1rem;
+      letter-spacing: .15em;
+      text-transform: uppercase;
+      cursor: pointer;
+      transition: background .15s, box-shadow .15s, color .15s;
+      outline-offset: 3px;
+    }
+    .btn:hover, .btn:focus-visible {
+      background: var(--neon);
+      color: var(--bg);
+      box-shadow: 0 0 14px var(--neon-glow);
+    }
+    .btn:focus-visible { outline: 2px solid var(--cyan); }
+    .btn.danger {
+      border-color: var(--red);
+      color: var(--red);
+    }
+    .btn.danger:hover, .btn.danger:focus-visible {
+      background: var(--red);
+      color: var(--bg);
+      box-shadow: 0 0 14px rgba(255,60,60,.4);
+    }
+
+    /* =============================================================
+       START SCREEN
+       ============================================================= */
+    #screen-start .logo-art {
+      font-size: clamp(.7rem, 1.6vw, 1rem);
+      color: var(--neon-dim);
+      white-space: pre;
+      line-height: 1.25;
+      text-align: center;
+    }
+    #screen-start .instructions {
+      max-width: 440px;
+      text-align: center;
+      font-size: .88rem;
+      color: var(--text);
+      line-height: 1.7;
+      border: 1px solid var(--border);
+      padding: 1rem 1.4rem;
+      background: var(--surface);
+    }
+    #screen-start .instructions strong { color: var(--neon); }
+
+    /* =============================================================
+       GAME SCREEN
+       ============================================================= */
+    #screen-game {
+      flex-direction: column;
+      justify-content: flex-start;
+      padding: 0;
+      transform: translate(var(--shake-x), var(--shake-y));
+      transition: transform 0s;
+    }
+
+    /* HUD bar */
+    #hud {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: .45rem 1.2rem;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+      gap: .5rem;
+      flex-wrap: wrap;
+    }
+    .hud-block { display: flex; flex-direction: column; align-items: center; min-width: 72px; }
+    .hud-val {
+      font-size: 1.3rem;
+      color: var(--neon);
+      text-shadow: 0 0 6px var(--neon-glow);
+      line-height: 1;
+    }
+    #lives-display span { font-size: 1.3rem; }
+
+    /* Wave badge */
+    #wave-badge {
+      font-size: .78rem;
+      color: var(--amber);
+      letter-spacing: .1em;
+      border: 1px solid var(--amber);
+      padding: .18rem .6rem;
+    }
+
+    /* Combo pill */
+    #combo-display {
+      font-size: 1rem;
+      color: var(--amber);
+      text-shadow: 0 0 8px rgba(255,183,0,.5);
+      min-width: 72px;
+      text-align: center;
+      transition: transform .1s;
+    }
+
+    /* Arena (canvas wrapper) */
+    #arena-wrap {
+      position: relative;
+      flex: 1 1 auto;
+      width: 100%;
+      overflow: hidden;
+    }
+    /* Both canvases fill the wrapper and stack on top of each other */
+    #arena,
+    #particle-canvas {
+      position: absolute;
+      top: 0; left: 0;
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+
+    /* Typing input row */
+    #input-row {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      gap: .6rem;
+      padding: .5rem 1rem;
+      background: var(--surface);
+      border-top: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+    #input-row .prompt-sym { color: var(--neon); font-size: 1.1rem; }
+    #type-input {
+      flex: 1;
+      background: transparent;
+      border: none;
+      outline: none;
+      font-family: var(--font);
+      font-size: 1.15rem;
+      color: var(--neon);
+      caret-color: var(--neon);
+    }
+    #type-input::placeholder { color: var(--neon-dim); }
+
+    /* Production server line (drawn in JS, also shown as label) */
+    #server-label {
+      position: absolute;
+      bottom: 0; left: 0; right: 0;
+      pointer-events: none;
+    }
+
+    /* =============================================================
+       PAUSE SCREEN (overlay on top of game)
+       ============================================================= */
+    #screen-pause {
+      background: rgba(10,13,10,.88);
+      z-index: 20;
+    }
+
+    /* =============================================================
+       GAME OVER SCREEN
+       ============================================================= */
+    #screen-gameover .score-box {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: .5rem 2rem;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      padding: 1.2rem 2rem;
+      text-align: center;
+      min-width: 280px;
+    }
+    #screen-gameover .score-box .score-label { font-size: .75rem; color: var(--text-muted); }
+    #screen-gameover .score-box .score-val   { font-size: 1.6rem; color: var(--neon); }
+    #screen-gameover .score-box .hs-val      { font-size: 1.6rem; color: var(--amber); }
+    #screen-gameover .new-hs {
+      color: var(--amber);
+      font-size: .9rem;
+      letter-spacing: .15em;
+      animation: blink 1s step-end infinite;
+    }
+    @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0} }
+
+    /* =============================================================
+       PARTICLES  (canvas overlay, pointer-events: none)
+       ============================================================= */
+    #particle-canvas {
+      pointer-events: none;
+      z-index: 10;
+    }
+
+    /* =============================================================
+       SCANLINE OVERLAY — purely decorative
+       ============================================================= */
+    body::after {
+      content: '';
+      position: fixed; inset: 0;
+      background: repeating-linear-gradient(
+        to bottom,
+        transparent 0px, transparent 3px,
+        rgba(0,0,0,.18) 3px, rgba(0,0,0,.18) 4px
+      );
+      pointer-events: none;
+      z-index: 999;
+    }
+
+    /* =============================================================
+       RESPONSIVE TWEAKS
+       ============================================================= */
+    @media (max-width: 480px) {
+      .hud-val { font-size: 1rem; }
+      #type-input { font-size: 1rem; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ================================================================
+     START SCREEN
+     ================================================================ -->
+<section id="screen-start" class="screen active" role="main" aria-label="Layar Mulai">
+  <pre class="logo-art" aria-hidden="true">
+  ██████╗ ██╗   ██╗ ██████╗
+  ██╔══██╗██║   ██║██╔════╝
+  ██████╔╝██║   ██║██║  ███╗
+  ██╔══██╗██║   ██║██║   ██║
+  ██████╔╝╚██████╔╝╚██████╔╝
+  ╚═════╝  ╚═════╝  ╚═════╝
+  ██╗  ██╗██╗   ██╗███╗  ██╗████████╗███████╗██████╗
+  ██║  ██║██║   ██║████╗ ██║╚══██╔══╝██╔════╝██╔══██╗
+  ███████║██║   ██║██╔██╗██║   ██║   █████╗  ██████╔╝
+  ██╔══██║██║   ██║██║╚████║   ██║   ██╔══╝  ██╔══██╗
+  ██║  ██║╚██████╔╝██║ ╚███║   ██║   ███████╗██║  ██║
+  ╚═╝  ╚═╝ ╚═════╝ ╚═╝  ╚══╝   ╚═╝   ╚══════╝╚═╝  ╚═╝</pre>
+
+  <p class="subtitle">IBM AI Builders Challenge — IT Track</p>
+
+  <div class="instructions" role="note">
+    <strong>Cara Bermain</strong><br><br>
+    Bug 🐛 jatuh dari atas layar — ketik <strong>kata error</strong>-nya lalu tekan
+    <strong>Spasi</strong> atau <strong>Enter</strong> untuk memusnahkannya sebelum
+    mencapai <strong>SERVER PRODUKSI</strong>.<br><br>
+    ✦ Kata benar → poin + multiplikator kombo<br>
+    ✦ Bug lolos → hilang 1 nyawa, layar berguncang<br>
+    ✦ Kesulitan meningkat setiap 30 detik<br>
+    ✦ Tekan <strong>Esc</strong> untuk pause
+  </div>
+
+  <div style="display:flex; gap:1rem; flex-wrap:wrap; justify-content:center;">
+    <button class="btn" id="btn-start" aria-label="Mulai bermain">▶ MULAI</button>
+  </div>
+
+  <p class="label" id="hs-preview" aria-live="polite"></p>
+</section>
+
+<!-- ================================================================
+     GAME SCREEN
+     ================================================================ -->
+<section id="screen-game" class="screen" role="main" aria-label="Arena Permainan">
+  <!-- HUD -->
+  <div id="hud" role="status" aria-live="polite" aria-atomic="true">
+    <div class="hud-block">
+      <span class="label">Skor</span>
+      <span class="hud-val" id="score-display">0</span>
+    </div>
+    <div class="hud-block">
+      <span class="label">Rekor</span>
+      <span class="hud-val" id="hs-display" style="color:var(--amber)">0</span>
+    </div>
+    <span id="wave-badge">GELOMBANG 1</span>
+    <div class="hud-block">
+      <span class="label">Kombo</span>
+      <span id="combo-display">×1</span>
+    </div>
+    <div class="hud-block" id="lives-display" aria-label="Nyawa tersisa">
+      <span class="label">Nyawa</span>
+      <div id="hearts"></div>
+    </div>
+  </div>
+
+  <!-- Arena canvas -->
+  <div id="arena-wrap" aria-hidden="true">
+    <canvas id="arena"></canvas>
+    <canvas id="particle-canvas"></canvas>
+  </div>
+
+  <!-- Typing input -->
+  <div id="input-row">
+    <span class="prompt-sym" aria-hidden="true">&gt;_</span>
+    <input
+      type="text"
+      id="type-input"
+      autocomplete="off"
+      autocorrect="off"
+      autocapitalize="off"
+      spellcheck="false"
+      placeholder="ketik nama bug di sini…"
+      aria-label="Ketik nama bug"
+    />
+  </div>
+</section>
+
+<!-- ================================================================
+     PAUSE SCREEN
+     ================================================================ -->
+<section id="screen-pause" class="screen" role="dialog" aria-modal="true" aria-label="Jeda">
+  <p class="title">— JEDA —</p>
+  <p class="subtitle">Permainan dijeda</p>
+  <button class="btn" id="btn-resume" aria-label="Lanjutkan permainan">▶ LANJUTKAN</button>
+  <button class="btn danger" id="btn-quit" aria-label="Keluar ke menu utama">✕ KELUAR</button>
+</section>
+
+<!-- ================================================================
+     GAME OVER SCREEN
+     ================================================================ -->
+<section id="screen-gameover" class="screen" role="main" aria-label="Layar Game Over">
+  <p class="title">GAME OVER</p>
+  <p class="subtitle" id="go-wave-label"></p>
+
+  <div class="score-box" role="region" aria-label="Statistik akhir">
+    <div>
+      <div class="score-label">SKOR AKHIR</div>
+      <div class="score-val" id="go-score">0</div>
+    </div>
+    <div>
+      <div class="score-label">REKOR TERTINGGI</div>
+      <div class="hs-val" id="go-hs">0</div>
+    </div>
+    <div>
+      <div class="score-label">BUG DIBASMI</div>
+      <div class="score-val" id="go-killed">0</div>
+    </div>
+    <div>
+      <div class="score-label">BUG LOLOS</div>
+      <div class="score-val" id="go-missed" style="color:var(--red)">0</div>
+    </div>
+  </div>
+
+  <p class="new-hs" id="new-hs-banner" style="display:none">🏆 REKOR BARU!</p>
+
+  <div style="display:flex; gap:1rem; flex-wrap:wrap; justify-content:center;">
+    <button class="btn" id="btn-restart">↺ MAIN LAGI</button>
+    <button class="btn" id="btn-menu">⌂ MENU UTAMA</button>
+  </div>
+</section>
+
+<script>
+/* ================================================================
+   BUG HUNTER — single-file game engine
+   IBM AI Builders Challenge 2025 — IT Track
+   ================================================================ */
+
+'use strict';
+
+/* ----------------------------------------------------------------
+   SECTION 1: CONSTANTS & CONFIGURATION
+   ---------------------------------------------------------------- */
+const BUG_WORDS = [
+  'NullPointer', 'SyntaxError', 'Segfault', 'Timeout', '404',
+  'StackOverflow', 'Deadlock', 'OutOfMemory', 'Undefined', 'TypeError',
+  'IndexError', 'Overflow', 'Underflow', 'Infinite', 'NaN',
+  'Deprecation', 'Conflict', 'Forbidden', 'BadRequest', 'Exception'
+];
+
+const BUG_EMOJI  = '🐛';
+const MAX_LIVES  = 3;
+const WAVE_INTERVAL_MS = 30_000;   // ramp difficulty every 30 s
+
+// Base wave config — each wave level scales on top of this
+const BASE_SPEED      = 42;   // px/s at wave 1
+const SPEED_STEP      = 14;   // px/s added per wave
+const BASE_INTERVAL   = 2400; // ms between spawns at wave 1
+const INTERVAL_STEP   = 220;  // ms reduction per wave
+const MIN_INTERVAL    = 600;  // floor spawn interval
+
+const PARTICLE_COUNT  = 22;   // per explosion
+const SHAKE_DURATION  = 380;  // ms
+const SHAKE_AMPLITUDE = 9;    // px
+
+const LS_KEY_HS = 'bugHunter_highScore';
+
+/* ----------------------------------------------------------------
+   SECTION 2: DOM REFERENCES
+   ---------------------------------------------------------------- */
+const screens = {
+  start:    document.getElementById('screen-start'),
+  game:     document.getElementById('screen-game'),
+  pause:    document.getElementById('screen-pause'),
+  gameover: document.getElementById('screen-gameover'),
+};
+
+const arena         = document.getElementById('arena');
+const pCanvas       = document.getElementById('particle-canvas');
+const ctx           = arena.getContext('2d');
+const pCtx          = pCanvas.getContext('2d');
+const typeInput     = document.getElementById('type-input');
+const scoreDisplay  = document.getElementById('score-display');
+const hsDisplay     = document.getElementById('hs-display');
+const comboDisplay  = document.getElementById('combo-display');
+const waveBadge     = document.getElementById('wave-badge');
+const heartsEl      = document.getElementById('hearts');
+const hsPrev        = document.getElementById('hs-preview');
+const gameScreen    = document.getElementById('screen-game');
+
+/* ----------------------------------------------------------------
+   SECTION 3: GAME STATE
+   ---------------------------------------------------------------- */
+let state = {};         // reset each new game (see initState)
+let rafId = null;       // requestAnimationFrame handle
+let lastTs = 0;         // previous frame timestamp
+
+function initState() {
+  state = {
+    running:   false,
+    paused:    false,
+    score:     0,
+    combo:     1,
+    lives:     MAX_LIVES,
+    wave:      1,
+    killed:    0,
+    missed:    0,
+    bugs:      [],       // active Bug objects
+    particles: [],       // active Particle objects
+    spawnTimer: 0,       // ms until next spawn
+    waveTimer:  0,       // ms until next wave
+    shakeTimer: 0,       // ms remaining for screen shake
+    spawnInterval: BASE_INTERVAL,
+    bugSpeed:      BASE_SPEED,
+  };
+}
+
+/* ----------------------------------------------------------------
+   SECTION 4: WEB AUDIO — SOUND EFFECTS (no audio files)
+   ---------------------------------------------------------------- */
+let audioCtx = null;
+
+function ensureAudio() {
+  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+}
+
+/**
+ * Play a synthesised sound.
+ * @param {'kill'|'miss'|'wave'|'gameover'} type
+ */
+function playSound(type) {
+  try {
+    ensureAudio();
+    const ac  = audioCtx;
+    const now = ac.currentTime;
+
+    // Master gain (soft)
+    const master = ac.createGain();
+    master.connect(ac.destination);
+
+    if (type === 'kill') {
+      // Short ascending chirp — rewarding
+      [280, 420, 560].forEach((freq, i) => {
+        const osc = ac.createOscillator();
+        const g   = ac.createGain();
+        osc.connect(g); g.connect(master);
+        osc.type = 'square';
+        osc.frequency.setValueAtTime(freq, now + i * 0.055);
+        g.gain.setValueAtTime(0.18, now + i * 0.055);
+        g.gain.exponentialRampToValueAtTime(0.001, now + i * 0.055 + 0.12);
+        osc.start(now + i * 0.055);
+        osc.stop(now + i * 0.055 + 0.13);
+      });
+
+    } else if (type === 'combo') {
+      // Higher, brighter ding for big combos
+      const osc = ac.createOscillator();
+      const g   = ac.createGain();
+      osc.connect(g); g.connect(master);
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(880, now);
+      osc.frequency.exponentialRampToValueAtTime(1200, now + 0.12);
+      g.gain.setValueAtTime(0.22, now);
+      g.gain.exponentialRampToValueAtTime(0.001, now + 0.22);
+      osc.start(now); osc.stop(now + 0.23);
+
+    } else if (type === 'miss') {
+      // Low thud + descending tone — ominous
+      const osc = ac.createOscillator();
+      const g   = ac.createGain();
+      osc.connect(g); g.connect(master);
+      osc.type = 'sawtooth';
+      osc.frequency.setValueAtTime(220, now);
+      osc.frequency.exponentialRampToValueAtTime(60, now + 0.35);
+      g.gain.setValueAtTime(0.3, now);
+      g.gain.exponentialRampToValueAtTime(0.001, now + 0.38);
+      osc.start(now); osc.stop(now + 0.4);
+
+    } else if (type === 'wave') {
+      // Ascending fanfare — new wave
+      [330, 440, 550, 660].forEach((freq, i) => {
+        const osc = ac.createOscillator();
+        const g   = ac.createGain();
+        osc.connect(g); g.connect(master);
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(freq, now + i * 0.09);
+        g.gain.setValueAtTime(0.2, now + i * 0.09);
+        g.gain.exponentialRampToValueAtTime(0.001, now + i * 0.09 + 0.18);
+        osc.start(now + i * 0.09);
+        osc.stop(now + i * 0.09 + 0.2);
+      });
+
+    } else if (type === 'gameover') {
+      // Descending doom chord
+      [440, 349, 262, 196].forEach((freq, i) => {
+        const osc = ac.createOscillator();
+        const g   = ac.createGain();
+        osc.connect(g); g.connect(master);
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(freq, now + i * 0.18);
+        g.gain.setValueAtTime(0.22, now + i * 0.18);
+        g.gain.exponentialRampToValueAtTime(0.001, now + i * 0.18 + 0.4);
+        osc.start(now + i * 0.18);
+        osc.stop(now + i * 0.18 + 0.45);
+      });
+    }
+  } catch (_) {
+    // Audio unavailable — silent fallback
+  }
+}
+
+/* ----------------------------------------------------------------
+   SECTION 5: BUG CLASS
+   ---------------------------------------------------------------- */
+class Bug {
+  constructor(word, arenaW, arenaH) {
+    this.word    = word;
+    this.label   = `${BUG_EMOJI} ${word}`;
+    // Random x position with padding
+    this.x       = 40 + Math.random() * Math.max(arenaW - 80, 10);
+    this.y       = -30;
+    this.speed   = state.bugSpeed + (Math.random() - 0.5) * 10;
+    this.dead    = false;
+    this.matched = false;
+    // Slight horizontal drift for personality
+    this.drift   = (Math.random() - 0.5) * 18;
+    this.alpha   = 1;
+  }
+
+  update(dt, arenaH) {
+    if (this.dead) return;
+    this.y    += this.speed * dt;
+    this.x    += this.drift * dt * 0.3;
+    // Bounce off side walls
+    // (clamped in draw; drift reversal handled here)
+  }
+
+  /** Returns true if bug reached the production server line */
+  reachedBottom(serverY) {
+    return this.y >= serverY;
+  }
+}
+
+/* ----------------------------------------------------------------
+   SECTION 6: PARTICLE CLASS
+   ---------------------------------------------------------------- */
+class Particle {
+  constructor(x, y) {
+    this.x    = x;
+    this.y    = y;
+    const ang = Math.random() * Math.PI * 2;
+    const spd = 60 + Math.random() * 160;
+    this.vx   = Math.cos(ang) * spd;
+    this.vy   = Math.sin(ang) * spd;
+    this.life = 0.6 + Math.random() * 0.5;  // seconds
+    this.maxLife = this.life;
+    this.size = 2.5 + Math.random() * 4;
+    // Colour chosen from neon palette
+    const cols = ['#39ff14','#00e5ff','#ffb700','#ff3c3c','#ffffff'];
+    this.color = cols[Math.floor(Math.random() * cols.length)];
+  }
+
+  update(dt) {
+    this.x    += this.vx * dt;
+    this.y    += this.vy * dt;
+    this.vy   += 160 * dt;  // gravity
+    this.life -= dt;
+  }
+
+  get alive() { return this.life > 0; }
+
+  get alpha() { return Math.max(0, this.life / this.maxLife); }
+}
+
+/* ----------------------------------------------------------------
+   SECTION 7: CANVAS RESIZE
+   ---------------------------------------------------------------- */
+function resizeCanvases() {
+  const wrap = document.getElementById('arena-wrap');
+  const w = wrap.clientWidth;
+  const h = wrap.clientHeight;
+  arena.width    = w; arena.height    = h;
+  pCanvas.width  = w; pCanvas.height  = h;
+}
+
+window.addEventListener('resize', () => {
+  if (state.running) resizeCanvases();
+});
+
+/* ----------------------------------------------------------------
+   SECTION 8: RENDERING
+   ---------------------------------------------------------------- */
+const SERVER_Y_RATIO = 0.88;  // production server line position
+
+function getServerY() { return arena.height * SERVER_Y_RATIO; }
+
+function drawArena() {
+  const W = arena.width;
+  const H = arena.height;
+  const serverY = getServerY();
+
+  // Background
+  ctx.clearRect(0, 0, W, H);
+  ctx.fillStyle = '#0a0d0a';
+  ctx.fillRect(0, 0, W, H);
+
+  // Grid lines (subtle)
+  ctx.strokeStyle = '#0f1f0f';
+  ctx.lineWidth = 1;
+  const GRID = 48;
+  for (let x = 0; x < W; x += GRID) {
+    ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke();
+  }
+  for (let y = 0; y < H; y += GRID) {
+    ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke();
+  }
+
+  // Production server line
+  ctx.save();
+  ctx.strokeStyle = '#ff3c3c';
+  ctx.lineWidth   = 2;
+  ctx.setLineDash([8, 6]);
+  ctx.shadowColor = 'rgba(255,60,60,0.6)';
+  ctx.shadowBlur  = 8;
+  ctx.beginPath();
+  ctx.moveTo(0, serverY);
+  ctx.lineTo(W, serverY);
+  ctx.stroke();
+  ctx.restore();
+
+  // Server label
+  ctx.save();
+  ctx.fillStyle = '#ff3c3c';
+  ctx.font = 'bold 11px Courier New, monospace';
+  ctx.textAlign = 'left';
+  ctx.shadowColor = 'rgba(255,60,60,0.5)';
+  ctx.shadowBlur  = 6;
+  ctx.fillText('⚡ SERVER PRODUKSI', 10, serverY - 6);
+  ctx.restore();
+
+  // Draw bugs — set font once here; save/restore inside the loop handles the rest
+  ctx.save();
+  ctx.font = '15px Courier New, monospace';
+  ctx.textAlign = 'center';
+
+  for (const bug of state.bugs) {
+    if (bug.dead) continue;
+    const x = Math.min(Math.max(bug.x, 10), W - 10);
+    const y = bug.y;
+
+    // Highlight matching prefix in input
+    const typed = typeInput.value.trim().toLowerCase();
+    const word  = bug.word.toLowerCase();
+
+    // Bug container box
+    const metrics = ctx.measureText(bug.label);
+    const bw = metrics.width + 18;
+    const bh = 26;
+
+    ctx.save();
+    ctx.globalAlpha = bug.alpha;
+
+    // Box background
+    ctx.fillStyle = 'rgba(10,13,10,0.78)';
+    ctx.strokeStyle = '#1f3a1f';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.rect(x - bw / 2, y - bh / 2, bw, bh);
+    ctx.fill(); ctx.stroke();
+
+    // Draw label with prefix highlight
+    const emoji   = BUG_EMOJI + ' ';
+    const emojiW  = ctx.measureText(emoji).width;
+    const startX  = x - bw / 2 + 9;
+    const textY   = y + 5;
+
+    // Emoji
+    ctx.fillStyle = '#fff';
+    ctx.textAlign = 'left';
+    ctx.fillText(emoji, startX, textY);
+
+    // Word characters — highlight matched prefix in neon
+    let charX = startX + emojiW;
+    for (let i = 0; i < bug.word.length; i++) {
+      const ch = bug.word[i];
+      ctx.fillStyle = (typed.length > 0 && i < typed.length &&
+                       word.startsWith(typed.slice(0, i + 1)))
+                      ? '#39ff14'
+                      : '#c8f7c5';
+      ctx.fillText(ch, charX, textY);
+      charX += ctx.measureText(ch).width;
+    }
+
+    ctx.restore();
+  }
+  ctx.restore();   // matches the outer save() before the bugs loop
+}
+
+function drawParticles(dt) {
+  pCtx.clearRect(0, 0, pCanvas.width, pCanvas.height);
+  for (let i = state.particles.length - 1; i >= 0; i--) {
+    const p = state.particles[i];
+    p.update(dt);
+    if (!p.alive) { state.particles.splice(i, 1); continue; }
+
+    pCtx.save();
+    pCtx.globalAlpha = p.alpha;
+    pCtx.fillStyle   = p.color;
+    pCtx.shadowColor = p.color;
+    pCtx.shadowBlur  = 6;
+    pCtx.beginPath();
+    pCtx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+    pCtx.fill();
+    pCtx.restore();
+  }
+}
+
+/* ----------------------------------------------------------------
+   SECTION 9: SPAWN LOGIC
+   ---------------------------------------------------------------- */
+function spawnBug() {
+  const word = BUG_WORDS[Math.floor(Math.random() * BUG_WORDS.length)];
+  state.bugs.push(new Bug(word, arena.width, arena.height));
+}
+
+/* ----------------------------------------------------------------
+   SECTION 10: EXPLOSION (particle burst)
+   ---------------------------------------------------------------- */
+function explode(x, y) {
+  for (let i = 0; i < PARTICLE_COUNT; i++) {
+    state.particles.push(new Particle(x, y));
+  }
+}
+
+/* ----------------------------------------------------------------
+   SECTION 11: SCREEN SHAKE
+   ---------------------------------------------------------------- */
+function triggerShake() {
+  state.shakeTimer = SHAKE_DURATION;
+}
+
+function updateShake(dt) {
+  if (state.shakeTimer <= 0) {
+    gameScreen.style.setProperty('--shake-x', '0px');
+    gameScreen.style.setProperty('--shake-y', '0px');
+    return;
+  }
+  state.shakeTimer -= dt * 1000;
+  const prog = state.shakeTimer / SHAKE_DURATION;
+  const amp  = SHAKE_AMPLITUDE * prog;
+  gameScreen.style.setProperty('--shake-x', `${(Math.random() * 2 - 1) * amp}px`);
+  gameScreen.style.setProperty('--shake-y', `${(Math.random() * 2 - 1) * amp}px`);
+}
+
+/* ----------------------------------------------------------------
+   SECTION 12: SCORING & COMBO
+   ---------------------------------------------------------------- */
+function killBug(bug) {
+  bug.dead = true;
+  const pts = 100 * state.combo;
+  state.score  += pts;
+  state.killed += 1;
+  state.combo  += 1;
+
+  // Pop combo sound on multiples of 5
+  if (state.combo % 5 === 0) playSound('combo');
+  else                        playSound('kill');
+
+  // Floating score text (particle canvas)
+  showFloatingText(`+${pts}`, bug.x, bug.y);
+
+  updateHUD();
+
+  // Animate combo pill
+  comboDisplay.style.transform = 'scale(1.4)';
+  setTimeout(() => { comboDisplay.style.transform = 'scale(1)'; }, 120);
+}
+
+function missBug(bug) {
+  bug.dead = true;
+  state.missed += 1;
+  state.lives  -= 1;
+  state.combo   = 1;    // reset combo
+  playSound('miss');
+  triggerShake();
+  updateHUD();
+
+  if (state.lives <= 0) endGame();
+}
+
+/* ----------------------------------------------------------------
+   SECTION 13: FLOATING TEXT (drawn on particle canvas)
+   ---------------------------------------------------------------- */
+const floats = [];   // {x, y, text, life, vy}
+
+function showFloatingText(text, x, y) {
+  floats.push({ text, x, y, life: 1.1, vy: -55 });
+}
+
+function drawFloatingTexts(dt) {
+  for (let i = floats.length - 1; i >= 0; i--) {
+    const f = floats[i];
+    f.y    += f.vy * dt;
+    f.life -= dt;
+    if (f.life <= 0) { floats.splice(i, 1); continue; }
+
+    pCtx.save();
+    pCtx.globalAlpha = Math.max(0, f.life);
+    pCtx.fillStyle   = '#ffb700';
+    pCtx.font        = 'bold 16px Courier New, monospace';
+    pCtx.textAlign   = 'center';
+    pCtx.shadowColor = '#ffb700';
+    pCtx.shadowBlur  = 8;
+    pCtx.fillText(f.text, f.x, f.y);
+    pCtx.restore();
+  }
+}
+
+/* ----------------------------------------------------------------
+   SECTION 14: HUD UPDATE
+   ---------------------------------------------------------------- */
+function updateHUD() {
+  scoreDisplay.textContent = state.score.toLocaleString('id-ID');
+  comboDisplay.textContent = `×${state.combo}`;
+
+  // Update hearts display
+  heartsEl.innerHTML = '';
+  for (let i = 0; i < MAX_LIVES; i++) {
+    const s = document.createElement('span');
+    s.textContent = i < state.lives ? '❤️' : '🖤';
+    s.style.fontSize = '1.1rem';
+    heartsEl.appendChild(s);
+  }
+
+  // High score
+  const hs = getHighScore();
+  hsDisplay.textContent   = Math.max(hs, state.score).toLocaleString('id-ID');
+  waveBadge.textContent   = `GELOMBANG ${state.wave}`;
+}
+
+/* ----------------------------------------------------------------
+   SECTION 15: WAVE MANAGEMENT
+   ---------------------------------------------------------------- */
+function advanceWave() {
+  state.wave         += 1;
+  state.bugSpeed      = BASE_SPEED  + SPEED_STEP    * (state.wave - 1);
+  state.spawnInterval = Math.max(MIN_INTERVAL,
+                          BASE_INTERVAL - INTERVAL_STEP * (state.wave - 1));
+  playSound('wave');
+  updateHUD();
+
+  // Show wave flash
+  showWaveFlash();
+}
+
+function showWaveFlash() {
+  // Draw on particle canvas as overlay text for 2 s
+  floats.push({
+    text:  `— GELOMBANG ${state.wave} —`,
+    x:     pCanvas.width / 2,
+    y:     pCanvas.height / 2,
+    life:  2.0,
+    vy:    -18
+  });
+}
+
+/* ----------------------------------------------------------------
+   SECTION 16: MAIN GAME LOOP
+   ---------------------------------------------------------------- */
+function gameLoop(ts) {
+  if (!state.running || state.paused) return;
+
+  const dt = Math.min((ts - lastTs) / 1000, 0.05);  // cap at 50 ms
+  lastTs = ts;
+
+  // Wave timer
+  state.waveTimer += dt * 1000;
+  if (state.waveTimer >= WAVE_INTERVAL_MS) {
+    state.waveTimer = 0;
+    advanceWave();
+  }
+
+  // Spawn timer
+  state.spawnTimer -= dt * 1000;
+  if (state.spawnTimer <= 0) {
+    spawnBug();
+    state.spawnTimer = state.spawnInterval;
+  }
+
+  // Update bugs
+  const serverY = getServerY();
+  for (const bug of state.bugs) {
+    if (!state.running) break;   // stop processing if endGame was triggered mid-loop
+    if (bug.dead) continue;
+    bug.update(dt, arena.height);
+    if (bug.reachedBottom(serverY)) {
+      explode(bug.x, serverY);
+      missBug(bug);
+    }
+  }
+
+  // Prune dead bugs
+  state.bugs = state.bugs.filter(b => !b.dead);
+
+  // Screen shake
+  updateShake(dt);
+
+  // Draw
+  drawArena();
+  drawParticles(dt);
+  drawFloatingTexts(dt);
+
+  if (state.running) rafId = requestAnimationFrame(gameLoop);
+}
+
+/* ----------------------------------------------------------------
+   SECTION 17: INPUT HANDLING
+   ---------------------------------------------------------------- */
+typeInput.addEventListener('keydown', e => {
+  if (!state.running || state.paused) return;
+
+  if (e.key === 'Enter' || e.key === ' ') {
+    e.preventDefault();
+    submitWord();
+  }
+});
+
+// Live prefix highlighting — redrawn each frame anyway, but
+// also re-sort bugs by proximity to give visual feedback
+typeInput.addEventListener('input', () => {
+  // No action needed — drawArena uses typeInput.value each frame
+});
+
+function submitWord() {
+  const typed = typeInput.value.trim().toLowerCase();
+  if (!typed) return;
+
+  // Find the lowest (closest to server line) matching bug
+  let best = null;
+  let bestY = -Infinity;
+
+  for (const bug of state.bugs) {
+    if (bug.dead) continue;
+    if (bug.word.toLowerCase() === typed) {
+      if (bug.y > bestY) { bestY = bug.y; best = bug; }
+    }
+  }
+
+  if (best) {
+    explode(best.x, best.y);
+    killBug(best);
+  } else {
+    // Wrong word — small punishment: break combo
+    state.combo = 1;
+    updateHUD();
+  }
+
+  typeInput.value = '';
+}
+
+/* ----------------------------------------------------------------
+   SECTION 18: KEYBOARD SHORTCUTS
+   ---------------------------------------------------------------- */
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') {
+    if (state.running && !state.paused)   pauseGame();
+    else if (state.paused)                resumeGame();
+  }
+});
+
+/* ----------------------------------------------------------------
+   SECTION 19: PAUSE / RESUME
+   ---------------------------------------------------------------- */
+function pauseGame() {
+  state.paused = true;
+  // Cancel the pending rAF so the loop doesn't keep running while paused
+  if (rafId) { cancelAnimationFrame(rafId); rafId = null; }
+  showScreen('pause');
+}
+
+function resumeGame() {
+  state.paused = false;
+  showScreen('game');
+  lastTs = performance.now();
+  rafId  = requestAnimationFrame(gameLoop);
+  typeInput.focus();
+}
+
+/* ----------------------------------------------------------------
+   SECTION 20: GAME START / END
+   ---------------------------------------------------------------- */
+function startGame() {
+  ensureAudio();
+  initState();
+  state.running      = true;
+  state.spawnTimer   = 500;    // first bug after 0.5 s
+  floats.length      = 0;
+
+  // Show screen first so arena-wrap has layout dimensions for resizeCanvases
+  showScreen('game');
+  resizeCanvases();
+
+  // Update HS in HUD
+  hsDisplay.textContent = getHighScore().toLocaleString('id-ID');
+
+  updateHUD();
+  typeInput.focus();
+
+  lastTs = performance.now();
+  rafId  = requestAnimationFrame(gameLoop);
+}
+
+function endGame() {
+  state.running = false;
+  if (rafId) { cancelAnimationFrame(rafId); rafId = null; }
+  gameScreen.style.setProperty('--shake-x', '0px');
+  gameScreen.style.setProperty('--shake-y', '0px');
+
+  playSound('gameover');
+
+  // Save high score
+  const prevHS  = getHighScore();
+  const isNewHS = state.score > prevHS;
+  if (isNewHS) saveHighScore(state.score);
+
+  // Populate game over screen
+  document.getElementById('go-score').textContent  = state.score.toLocaleString('id-ID');
+  document.getElementById('go-hs').textContent     = Math.max(prevHS, state.score).toLocaleString('id-ID');
+  document.getElementById('go-killed').textContent = state.killed;
+  document.getElementById('go-missed').textContent = state.missed;
+  document.getElementById('go-wave-label').textContent =
+    `Bertahan hingga Gelombang ${state.wave}`;
+
+  const banner = document.getElementById('new-hs-banner');
+  banner.style.display = isNewHS ? 'block' : 'none';
+
+  showScreen('gameover');
+}
+
+/* ----------------------------------------------------------------
+   SECTION 21: SCREEN SWITCHER
+   ---------------------------------------------------------------- */
+function showScreen(name) {
+  for (const [k, el] of Object.entries(screens)) {
+    el.classList.toggle('active', k === name);
+  }
+}
+
+/* ----------------------------------------------------------------
+   SECTION 22: HIGH SCORE (localStorage)
+   ---------------------------------------------------------------- */
+function getHighScore() {
+  return parseInt(localStorage.getItem(LS_KEY_HS) || '0', 10);
+}
+function saveHighScore(score) {
+  localStorage.setItem(LS_KEY_HS, String(score));
+}
+
+/* ----------------------------------------------------------------
+   SECTION 23: BUTTON WIRING
+   ---------------------------------------------------------------- */
+document.getElementById('btn-start').addEventListener('click',   startGame);
+document.getElementById('btn-resume').addEventListener('click',  resumeGame);
+document.getElementById('btn-quit').addEventListener('click',    () => {
+  state.running = false;
+  if (rafId) { cancelAnimationFrame(rafId); rafId = null; }
+  showScreen('start');
+  refreshHSPreview();
+});
+document.getElementById('btn-restart').addEventListener('click', startGame);
+document.getElementById('btn-menu').addEventListener('click',    () => {
+  showScreen('start');
+  refreshHSPreview();
+});
+
+/* ----------------------------------------------------------------
+   SECTION 24: INITIALISATION
+   ---------------------------------------------------------------- */
+function refreshHSPreview() {
+  const hs = getHighScore();
+  hsPrev.textContent = hs > 0 ? `Rekor Tertinggi: ${hs.toLocaleString('id-ID')}` : '';
+}
+
+refreshHSPreview();
+showScreen('start');
+</script>
+</body>
+</html>
